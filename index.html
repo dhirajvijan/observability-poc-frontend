@@ -2,9 +2,52 @@
 <html>
 <head>
   <title>Observability POC</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-right: 10px; }
+    #result { margin-top: 20px; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; }
+    .success { background: #e6f4ea; border: 1px solid #34a853; }
+    .error { background: #fce8e6; border: 1px solid #ea4335; }
+    label { display: block; margin-top: 20px; }
+  </style>
 </head>
 <body>
   <h1>Observability POC frontend</h1>
-  <p>Static Web App is live.</p>
+  <p>Calls the Function App proxy, which calls the Logic App.</p>
+
+  <button onclick="callBackend(0)">Call (force success)</button>
+  <button onclick="callBackend(100)">Call (force failure)</button>
+
+  <label>
+    Custom fail rate (%):
+    <input type="number" id="failRateInput" value="10" min="0" max="100" style="width: 60px;">
+    <button onclick="callCustom()">Call</button>
+  </label>
+
+  <div id="result">Click a button to call the backend...</div>
+
+  <script>
+    const FUNCTION_URL = "https://obs-poc-funcapp-axh3hkgsc5e0dyd0.francecentral-01.azurewebsites.net/api/proxy";
+
+    async function callBackend(failRate) {
+      const resultEl = document.getElementById('result');
+      resultEl.className = '';
+      resultEl.textContent = 'Calling...';
+      try {
+        const res = await fetch(`${FUNCTION_URL}?failRate=${failRate}`, { method: 'POST' });
+        const text = await res.text();
+        resultEl.className = res.ok ? 'success' : 'error';
+        resultEl.textContent = `Status: ${res.status}\n${text}`;
+      } catch (err) {
+        resultEl.className = 'error';
+        resultEl.textContent = 'Request failed: ' + err.message;
+      }
+    }
+
+    function callCustom() {
+      const val = document.getElementById('failRateInput').value;
+      callBackend(val);
+    }
+  </script>
 </body>
 </html>
