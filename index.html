@@ -3,25 +3,34 @@
 <head>
   <title>Observability POC</title>
   <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
-    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-right: 10px; }
+    body { font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-right: 10px; margin-bottom: 10px; }
     #result { margin-top: 20px; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; }
     .success { background: #e6f4ea; border: 1px solid #34a853; }
-    .error { background: #fce8e6; border: 1px solid #ea4335; }
+    .error-400 { background: #fef7e0; border: 1px solid #f9ab00; }
+    .error-500 { background: #fce8e6; border: 1px solid #ea4335; }
     label { display: block; margin-top: 20px; }
+    .row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    input[type="number"] { width: 60px; }
   </style>
 </head>
 <body>
   <h1>Observability POC frontend</h1>
-  <p>Calls the Function App proxy, which calls the Logic App.</p>
+  <p>Calls the Function App proxy, which calls the Logic App. The Logic App now returns 200 / 400 / 500 depending on the two rates below.</p>
 
-  <button onclick="callBackend(0)">Call (force success)</button>
-  <button onclick="callBackend(100)">Call (force failure)</button>
+  <div>
+    <button onclick="callBackend(0, 0)">Call (force success — 200)</button>
+    <button onclick="callBackend(100, 0)">Call (force bad payload — 400)</button>
+    <button onclick="callBackend(0, 100)">Call (force server error — 500)</button>
+  </div>
 
   <label>
-    Custom fail rate (%):
-    <input type="number" id="failRateInput" value="10" min="0" max="100" style="width: 60px;">
-    <button onclick="callCustom()">Call</button>
+    Custom rates —
+    400 rate (%): <input type="number" id="failRateInput" value="10" min="0" max="100">
+    500 rate (%): <input type="number" id="failRate500Input" value="5" min="0" max="100">
+    <div class="row">
+      <button onclick="callCustom()">Call</button>
+    </div>
   </label>
 
   <div id="result">Click a button to call the backend...</div>
@@ -29,25 +38,37 @@
   <script>
     const FUNCTION_URL = "https://obs-poc-funcapp-axh3hkgsc5e0dyd0.francecentral-01.azurewebsites.net/api/proxy";
 
-    async function callBackend(failRate) {
+    async function callBackend(failRate, failRate500) {
       const resultEl = document.getElementById('result');
       resultEl.className = '';
       resultEl.textContent = 'Calling...';
       try {
-        const res = await fetch(`${FUNCTION_URL}?failRate=${failRate}`, { method: 'POST' });
+        const url = `${FUNCTION_URL}?failRate=${failRate}&failRate500=${failRate500}`;
+        const res = await fetch(url, { method: 'POST' });
         const text = await res.text();
-        resultEl.className = res.ok ? 'success' : 'error';
+
+        if (res.ok) {
+          resultEl.className = 'success';
+        } else if (res.status >= 400 && res.status < 500) {
+          resultEl.className = 'error-400';
+        } else {
+          resultEl.className = 'error-500';
+        }
         resultEl.textContent = `Status: ${res.status}\n${text}`;
       } catch (err) {
-        resultEl.className = 'error';
+        resultEl.className = 'error-500';
         resultEl.textContent = 'Request failed: ' + err.message;
       }
     }
 
     function callCustom() {
-      const val = document.getElementById('failRateInput').value;
-      callBackend(val);
+      const failRate = document.getElementById('failRateInput').value;
+      const failRate500 = document.getElementById('failRate500Input').value;
+      callBackend(failRate, failRate500);
     }
   </script>
 </body>
 </html>
+```
+
+Commit directly to `main` once pasted, and check the Actions tab for the green checkmark.
