@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
   <title>Observability POC</title>
   <style>
     body { font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; }
@@ -16,7 +17,7 @@
 </head>
 <body>
   <h1>Observability POC frontend</h1>
-  <p>Calls the Function App proxy, which calls the Logic App. The Logic App now returns 200 / 400 / 500 depending on the two rates below.</p>
+  <p>Sends a test message to Service Bus. The Function App picks it up and calls the Logic App, which returns 200 / 400 / 500 depending on the two rates below. The outcome shows up in the <a href="https://lemon-sand-0cf29101e.5.azurestaticapps.net" target="_blank" rel="noopener">Reliability Console</a> a few minutes later.</p>
 
   <div>
     <button onclick="callBackend(0, 0)">Call (force success: 200)</button>
@@ -33,28 +34,36 @@
     </div>
   </label>
 
-  <div id="result">Click a button to call the backend...</div>
+  <div id="result">Click a button to send a message...</div>
 
   <script>
-    const FUNCTION_URL = "https://obs-poc-funcapp-axh3hkgsc5e0dyd0.francecentral-01.azurewebsites.net/api/proxy";
+    const FUNCTION_URL = "https://obs-poc-funcapp-axh3hkgsc5e0dyd0.francecentral-01.azurewebsites.net/api/sendmessage";
 
     async function callBackend(failRate, failRate500) {
       const resultEl = document.getElementById('result');
       resultEl.className = '';
-      resultEl.textContent = 'Calling...';
+      resultEl.textContent = 'Sending...';
       try {
-        const url = `${FUNCTION_URL}?failRate=${failRate}&failRate500=${failRate500}`;
+        const url = `${FUNCTION_URL}?failRate=${encodeURIComponent(failRate)}&failRate500=${encodeURIComponent(failRate500)}`;
         const res = await fetch(url, { method: 'POST' });
         const text = await res.text();
 
-        if (res.ok) {
+        let data = null;
+        try { data = JSON.parse(text); } catch (e) { /* not JSON, show raw text below */ }
+
+        if (res.ok && data && data.sent) {
           resultEl.className = 'success';
-        } else if (res.status >= 400 && res.status < 500) {
-          resultEl.className = 'error-400';
-        } else {
-          resultEl.className = 'error-500';
+          resultEl.textContent =
+            `Status: ${res.status}\n` +
+            `Message sent to Service Bus\n` +
+            `correlationId: ${data.correlationId}\n` +
+            `400 rate: ${data.failRate}%   500 rate: ${data.failRate500}%\n` +
+            `The outcome appears in the Reliability Console in a few minutes.`;
+          return;
         }
-        resultEl.textContent = `Status: ${res.status}\n${text}`;
+
+        resultEl.className = (res.status >= 400 && res.status < 500) ? 'error-400' : 'error-500';
+        resultEl.textContent = `Status: ${res.status}\n` + (data && data.error ? data.error : text);
       } catch (err) {
         resultEl.className = 'error-500';
         resultEl.textContent = 'Request failed: ' + err.message;
@@ -69,6 +78,3 @@
   </script>
 </body>
 </html>
-```
-
-Commit directly to `main` once pasted, and check the Actions tab for the green checkmark.
